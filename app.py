@@ -156,35 +156,54 @@ try:
             
             # Get existing values with proper type conversion
             try:
-                kilo_meters = float(row_data.get('Kilo Meters', 0)) if pd.notna(row_data.get('Kilo Meters', 0)) else 0.0
+                kilo_meters_per_month = float(row_data.get('Kilo Meters (Per Month)', 0)) if pd.notna(row_data.get('Kilo Meters (Per Month)', 0)) else 0.0
             except (ValueError, TypeError):
-                kilo_meters = 0.0
+                kilo_meters_per_month = 0.0
                 
             try:
-                rent_cost_48_months = float(row_data.get('Rent Cost (48 Months)', 0)) if pd.notna(row_data.get('Rent Cost (48 Months)', 0)) else 0.0
+                rent_cost_over_lease_period = float(row_data.get('Rent Cost (Over Lease Period)', 0)) if pd.notna(row_data.get('Rent Cost (Over Lease Period)', 0)) else 0.0
             except (ValueError, TypeError):
-                rent_cost_48_months = 0.0
+                rent_cost_over_lease_period = 0.0
             
-            # Calculate Excess KM Cost (48 Month)
-            if kilo_meters == 0:
-                excess_km_cost_48_month = 0.0
-            elif estimated_km_per_month > kilo_meters:
-                excess_km_cost_48_month = (estimated_km_per_month - kilo_meters) * excess_km_charge * 48
+            try:
+                sticker_cost = float(row_data.get('Sticker Cost', 0)) if pd.notna(row_data.get('Sticker Cost', 0)) else 0.0
+            except (ValueError, TypeError):
+                sticker_cost = 0.0
+            
+            try:
+                insurance_cost = float(row_data.get('Insurance Cost', 0)) if pd.notna(row_data.get('Insurance Cost', 0)) else 0.0
+            except (ValueError, TypeError):
+                insurance_cost = 0.0
+            
+            try:
+                months = float(row_data.get('MONTH', 48)) if pd.notna(row_data.get('MONTH', 48)) else 48.0  # Default to 48 months if not found
+            except (ValueError, TypeError):
+                months = 48.0
+            
+            # Calculate Excess KM Cost (Over the Lease Term) - using the MONTH column value
+            if kilo_meters_per_month == 0:
+                excess_km_cost_over_lease_term = 0.0
+            elif estimated_km_per_month > kilo_meters_per_month:
+                excess_km_cost_over_lease_term = (estimated_km_per_month - kilo_meters_per_month) * excess_km_charge * months
             else:
-                excess_km_cost_48_month = 0.0
+                excess_km_cost_over_lease_term = 0.0
             
             # Calculate Total Cost over the Lease Term
-            total_cost_over_lease_term = rent_cost_48_months + excess_km_cost_48_month
+            total_cost_over_lease_term = rent_cost_over_lease_period + excess_km_cost_over_lease_term + sticker_cost + insurance_cost
+            
+            # Calculate Cost per Month
+            cost_per_month = total_cost_over_lease_term / months if months > 0 else 0.0
             
             # Store raw values for saving
             raw_updated_row = row_data.copy()
             raw_updated_row['Excess KM charge (Per KM)'] = excess_km_charge
             raw_updated_row['Estimated KM (Per Month)'] = estimated_km_per_month
-            raw_updated_row['Excess KM Cost (48 Month)'] = excess_km_cost_48_month
+            raw_updated_row['Excess KM Cost (Over the Lease Term)'] = excess_km_cost_over_lease_term
             raw_updated_row['Total Cost over the Lease Term'] = total_cost_over_lease_term
+            raw_updated_row['Cost per Month'] = cost_per_month
             updated_rows.append((selection, raw_updated_row))
             
-            # Display card
+            # Display card with fixed height
             with card_cols[idx]:
                 st.markdown(f"""
                 <div style="
@@ -198,26 +217,31 @@ try:
                     <h4 style="margin-top: 0; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 8px;">
                         {selection}
                     </h4>
-                </div>
+                    <div style="flex-grow: 1;">
                 """, unsafe_allow_html=True)
                 
                 # Display all fields from the row
                 for col, value in row_data.items():
                     if col != first_column:  # Skip the first column as it's already shown in header
                         # Format the value based on the column
-                        if col in ['Excess KM charge (Per KM)', 'Estimated KM (Per Month)', 'Excess KM Cost (48 Month)', 'Total Cost over the Lease Term']:
+                        if col in ['Excess KM charge (Per KM)', 'Estimated KM (Per Month)', 'Excess KM Cost (Over the Lease Term)', 'Total Cost over the Lease Term', 'Cost per Month']:
                             if col == 'Excess KM charge (Per KM)':
-                                formatted_value = f"₹{excess_km_charge:,.2f}"
+                                formatted_value = f"{excess_km_charge:,.2f}"
                             elif col == 'Estimated KM (Per Month)':
                                 formatted_value = f"{estimated_km_per_month:,.1f} km"
-                            elif col == 'Excess KM Cost (48 Month)':
-                                formatted_value = f"₹{excess_km_cost_48_month:,.2f}"
+                            elif col == 'Excess KM Cost (Over the Lease Term)':
+                                formatted_value = f"{excess_km_cost_over_lease_term:,.2f}"
                             elif col == 'Total Cost over the Lease Term':
-                                formatted_value = f"₹{total_cost_over_lease_term:,.2f}"
-                        elif col == 'Rent Cost (48 Months)':
-                            formatted_value = f"₹{rent_cost_48_months:,.2f}"
-                        elif col == 'Kilo Meters':
-                            formatted_value = f"{kilo_meters:,.0f} km"
+                                formatted_value = f"{total_cost_over_lease_term:,.2f}"
+                            elif col == 'Cost per Month':
+                                formatted_value = f"{cost_per_month:,.2f}"
+                        elif col == 'Rent Cost (Over Lease Period)':
+                            formatted_value = f"{rent_cost_over_lease_period:,.2f}"
+                        elif col == 'Kilo Meters (Per Month)':
+                            formatted_value = f"{kilo_meters_per_month:,.0f} km"
+                        elif col in ['Sticker Cost', 'Insurance Cost']:
+                            cost_value = sticker_cost if col == 'Sticker Cost' else insurance_cost
+                            formatted_value = f"{cost_value:,.2f}"
                         else:
                             if pd.isna(value):
                                 formatted_value = "-"
@@ -225,10 +249,12 @@ try:
                                 formatted_value = str(value)
                         
                         # Highlight calculated fields
-                        if col in ['Excess KM Cost (48 Month)', 'Total Cost over the Lease Term']:
+                        if col in ['Rent Cost (Over Lease Period)', 'Sticker Cost', 'Insurance Cost', 'Excess KM Cost (Over the Lease Term)', 'Total Cost over the Lease Term', 'Cost per Month']:
                             st.markdown(f"**{col}:** <span style='color: #007bff; font-weight: bold;'>{formatted_value}</span>", unsafe_allow_html=True)
                         else:
                             st.markdown(f"**{col}:** {formatted_value}")
+                
+                st.markdown("</div></div>", unsafe_allow_html=True)
         
         # Highlight calculated fields
         st.markdown("### 🧮 Calculated Values Summary")
@@ -242,31 +268,48 @@ try:
                 
                 # Get existing values with proper type conversion
                 try:
-                    kilo_meters = float(row_data.get('Kilo Meters', 0)) if pd.notna(row_data.get('Kilo Meters', 0)) else 0.0
+                    kilo_meters_per_month = float(row_data.get('Kilo Meters (Per Month)', 0)) if pd.notna(row_data.get('Kilo Meters (Per Month)', 0)) else 0.0
                 except (ValueError, TypeError):
-                    kilo_meters = 0.0
+                    kilo_meters_per_month = 0.0
                     
                 try:
-                    rent_cost_48_months = float(row_data.get('Rent Cost (48 Months)', 0)) if pd.notna(row_data.get('Rent Cost (48 Months)', 0)) else 0.0
+                    rent_cost_over_lease_period = float(row_data.get('Rent Cost (Over Lease Period)', 0)) if pd.notna(row_data.get('Rent Cost (Over Lease Period)', 0)) else 0.0
                 except (ValueError, TypeError):
-                    rent_cost_48_months = 0.0
+                    rent_cost_over_lease_period = 0.0
                 
-                if kilo_meters == 0:
-                    excess_km_cost_48_month = 0.0
-                elif estimated_km_per_month > kilo_meters:
-                    excess_km_cost_48_month = (estimated_km_per_month - kilo_meters) * excess_km_charge * 48
+                try:
+                    sticker_cost = float(row_data.get('Sticker Cost', 0)) if pd.notna(row_data.get('Sticker Cost', 0)) else 0.0
+                except (ValueError, TypeError):
+                    sticker_cost = 0.0
+                
+                try:
+                    insurance_cost = float(row_data.get('Insurance Cost', 0)) if pd.notna(row_data.get('Insurance Cost', 0)) else 0.0
+                except (ValueError, TypeError):
+                    insurance_cost = 0.0
+                
+                try:
+                    months = float(row_data.get('MONTH', 48)) if pd.notna(row_data.get('MONTH', 48)) else 48.0
+                except (ValueError, TypeError):
+                    months = 48.0
+                
+                if kilo_meters_per_month == 0:
+                    excess_km_cost_over_lease_term = 0.0
+                elif estimated_km_per_month > kilo_meters_per_month:
+                    excess_km_cost_over_lease_term = (estimated_km_per_month - kilo_meters_per_month) * excess_km_charge * months
                 else:
-                    excess_km_cost_48_month = 0.0
+                    excess_km_cost_over_lease_term = 0.0
                 
-                total_cost_over_lease_term = rent_cost_48_months + excess_km_cost_48_month
+                total_cost_over_lease_term = rent_cost_over_lease_period + excess_km_cost_over_lease_term + sticker_cost + insurance_cost
+                cost_per_month = total_cost_over_lease_term / months if months > 0 else 0.0
                 
                 st.markdown(f"**{selection}**")
-                st.metric("Excess KM Cost (48 Month)", f"₹{excess_km_cost_48_month:,.2f}")
-                st.metric("Total Cost over the Lease Term", f"₹{total_cost_over_lease_term:,.2f}")
+                st.metric("Excess KM Cost (Over the Lease Term)", f"{excess_km_cost_over_lease_term:,.2f}")
+                st.metric("Total Cost over the Lease Term", f"{total_cost_over_lease_term:,.2f}")
+                st.metric("Cost per Month", f"{cost_per_month:,.2f}")
         
-        # Save button
+        # Save and Download buttons
         st.markdown("---")
-        col_save, col_info = st.columns([1, 3])
+        col_save, col_download, col_info = st.columns([1, 1, 2])
         
         with col_save:
             if st.button("💾 Save Changes to Excel", type="primary"):
@@ -282,8 +325,9 @@ try:
                         # Update the specific columns
                         df_original.loc[row_index, 'Excess KM charge (Per KM)'] = updated_row['Excess KM charge (Per KM)']
                         df_original.loc[row_index, 'Estimated KM (Per Month)'] = updated_row['Estimated KM (Per Month)']
-                        df_original.loc[row_index, 'Excess KM Cost (48 Month)'] = updated_row['Excess KM Cost (48 Month)']
+                        df_original.loc[row_index, 'Excess KM Cost (Over the Lease Term)'] = updated_row['Excess KM Cost (Over the Lease Term)']
                         df_original.loc[row_index, 'Total Cost over the Lease Term'] = updated_row['Total Cost over the Lease Term']
+                        df_original.loc[row_index, 'Cost per Month'] = updated_row['Cost per Month']
                     
                     # Save back to Excel
                     df_original.to_excel(excel_file_path, index=False)
@@ -301,8 +345,43 @@ try:
                 except Exception as e:
                     st.error(f"❌ Error saving to Excel: {str(e)}")
         
+        with col_download:
+            try:
+                # Prepare the updated dataframe for download
+                df_for_download = pd.read_excel(excel_file_path)
+                
+                # Update the dataframe with current calculated values
+                for selection, updated_row in updated_rows:
+                    # Find the row index in dataframe
+                    row_index = df_for_download[df_for_download[first_column] == selection].index[0]
+                    
+                    # Update the specific columns with current values
+                    df_for_download.loc[row_index, 'Excess KM charge (Per KM)'] = updated_row['Excess KM charge (Per KM)']
+                    df_for_download.loc[row_index, 'Estimated KM (Per Month)'] = updated_row['Estimated KM (Per Month)']
+                    df_for_download.loc[row_index, 'Excess KM Cost (Over the Lease Term)'] = updated_row['Excess KM Cost (Over the Lease Term)']
+                    df_for_download.loc[row_index, 'Total Cost over the Lease Term'] = updated_row['Total Cost over the Lease Term']
+                    df_for_download.loc[row_index, 'Cost per Month'] = updated_row['Cost per Month']
+                
+                # Convert dataframe to Excel bytes
+                from io import BytesIO
+                excel_buffer = BytesIO()
+                df_for_download.to_excel(excel_buffer, index=False, engine='openpyxl')
+                excel_buffer.seek(0)
+                
+                # Create download button
+                st.download_button(
+                    label="📥 Download Data",
+                    data=excel_buffer.getvalue(),
+                    file_name=f"updated_{excel_file_path}",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    help="Download Excel file with current calculated values"
+                )
+                
+            except Exception as e:
+                st.error(f"❌ Error preparing download: {str(e)}")
+        
         with col_info:
-            st.info("💡 Click 'Save Changes to Excel' to permanently update the Excel file with your calculations.")
+            st.info("💡 'Save Changes' updates the original file permanently. 'Download Data' gives you a copy with current calculations.")
         
     else:
         st.info("👆 Please select at least one item from the dropdowns to see the comparison.")
