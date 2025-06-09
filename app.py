@@ -194,6 +194,14 @@ try:
             # Calculate Cost per Month
             cost_per_month = total_cost_over_lease_term / months if months > 0 else 0.0
             
+            # Calculate Cost Per Kilo Meter - NEW CALCULATION
+            # Check if first column contains 'Prime Mover'
+            first_column_value = str(row_data[first_column]).lower()
+            if 'prime mover' in first_column_value and estimated_km_per_month > 0:
+                cost_per_kilo_meter = cost_per_month / estimated_km_per_month
+            else:
+                cost_per_kilo_meter = 0.0
+            
             # Store raw values for saving
             raw_updated_row = row_data.copy()
             raw_updated_row['Excess KM charge (Per KM)'] = excess_km_charge
@@ -201,6 +209,7 @@ try:
             raw_updated_row['Excess KM Cost (Over the Lease Term)'] = excess_km_cost_over_lease_term
             raw_updated_row['Total Cost over the Lease Term'] = total_cost_over_lease_term
             raw_updated_row['Cost per Month'] = cost_per_month
+            raw_updated_row['Cost Per Kilo Meter'] = cost_per_kilo_meter  # NEW FIELD
             updated_rows.append((selection, raw_updated_row))
             
             # Display card with fixed height
@@ -224,7 +233,7 @@ try:
                 for col, value in row_data.items():
                     if col != first_column:  # Skip the first column as it's already shown in header
                         # Format the value based on the column
-                        if col in ['Excess KM charge (Per KM)', 'Estimated KM (Per Month)', 'Excess KM Cost (Over the Lease Term)', 'Total Cost over the Lease Term', 'Cost per Month']:
+                        if col in ['Excess KM charge (Per KM)', 'Estimated KM (Per Month)', 'Excess KM Cost (Over the Lease Term)', 'Total Cost over the Lease Term', 'Cost per Month', 'Cost Per Kilo Meter']:
                             if col == 'Excess KM charge (Per KM)':
                                 formatted_value = f"{excess_km_charge:,.2f}"
                             elif col == 'Estimated KM (Per Month)':
@@ -235,6 +244,8 @@ try:
                                 formatted_value = f"{total_cost_over_lease_term:,.2f}"
                             elif col == 'Cost per Month':
                                 formatted_value = f"{cost_per_month:,.2f}"
+                            elif col == 'Cost Per Kilo Meter':
+                                formatted_value = f"{cost_per_kilo_meter:,.4f}" if cost_per_kilo_meter > 0 else "0.00"
                         elif col == 'Rent Cost (Over Lease Period)':
                             formatted_value = f"{rent_cost_over_lease_period:,.2f}"
                         elif col == 'Kilo Meters (Per Month)':
@@ -249,10 +260,15 @@ try:
                                 formatted_value = str(value)
                         
                         # Highlight calculated fields
-                        if col in ['Rent Cost (Over Lease Period)', 'Sticker Cost', 'Insurance Cost', 'Excess KM Cost (Over the Lease Term)', 'Total Cost over the Lease Term', 'Cost per Month']:
+                        if col in ['Rent Cost (Over Lease Period)', 'Sticker Cost', 'Insurance Cost', 'Excess KM Cost (Over the Lease Term)', 'Total Cost over the Lease Term', 'Cost per Month', 'Cost Per Kilo Meter']:
                             st.markdown(f"**{col}:** <span style='color: #007bff; font-weight: bold;'>{formatted_value}</span>", unsafe_allow_html=True)
                         else:
                             st.markdown(f"**{col}:** {formatted_value}")
+                
+                # Add Cost Per Kilo Meter if it's not already in the row data
+                if 'Cost Per Kilo Meter' not in row_data.index:
+                    formatted_value = f"{cost_per_kilo_meter:,.4f}" if cost_per_kilo_meter > 0 else "0.00"
+                    st.markdown(f"**Cost Per Kilo Meter:** <span style='color: #007bff; font-weight: bold;'>{formatted_value}</span>", unsafe_allow_html=True)
                 
                 st.markdown("</div></div>", unsafe_allow_html=True)
         
@@ -302,10 +318,18 @@ try:
                 total_cost_over_lease_term = rent_cost_over_lease_period + excess_km_cost_over_lease_term + sticker_cost + insurance_cost
                 cost_per_month = total_cost_over_lease_term / months if months > 0 else 0.0
                 
+                # Calculate Cost Per Kilo Meter for summary
+                first_column_value = str(row_data[first_column]).lower()
+                if 'prime mover' in first_column_value and estimated_km_per_month > 0:
+                    cost_per_kilo_meter = cost_per_month / estimated_km_per_month
+                else:
+                    cost_per_kilo_meter = 0.0
+                
                 st.markdown(f"**{selection}**")
                 st.metric("Excess KM Cost (Over the Lease Term)", f"{excess_km_cost_over_lease_term:,.2f}")
                 st.metric("Total Cost over the Lease Term", f"{total_cost_over_lease_term:,.2f}")
                 st.metric("Cost per Month", f"{cost_per_month:,.2f}")
+                st.metric("Cost Per Kilo Meter", f"{cost_per_kilo_meter:,.4f}" if cost_per_kilo_meter > 0 else "0.00")
         
         # Save and Download buttons
         st.markdown("---")
@@ -328,6 +352,7 @@ try:
                         df_original.loc[row_index, 'Excess KM Cost (Over the Lease Term)'] = updated_row['Excess KM Cost (Over the Lease Term)']
                         df_original.loc[row_index, 'Total Cost over the Lease Term'] = updated_row['Total Cost over the Lease Term']
                         df_original.loc[row_index, 'Cost per Month'] = updated_row['Cost per Month']
+                        df_original.loc[row_index, 'Cost Per Kilo Meter'] = updated_row['Cost Per Kilo Meter']  # NEW FIELD
                     
                     # Save back to Excel
                     df_original.to_excel(excel_file_path, index=False)
@@ -361,6 +386,7 @@ try:
                     df_for_download.loc[row_index, 'Excess KM Cost (Over the Lease Term)'] = updated_row['Excess KM Cost (Over the Lease Term)']
                     df_for_download.loc[row_index, 'Total Cost over the Lease Term'] = updated_row['Total Cost over the Lease Term']
                     df_for_download.loc[row_index, 'Cost per Month'] = updated_row['Cost per Month']
+                    df_for_download.loc[row_index, 'Cost Per Kilo Meter'] = updated_row['Cost Per Kilo Meter']  # NEW FIELD
                 
                 # Convert dataframe to Excel bytes
                 from io import BytesIO
